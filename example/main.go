@@ -5,19 +5,20 @@ import (
 	"log"
 	"net/http"
 
-	socketio "github.com/doquangtan/socket.io/v4"
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/gofiber/fiber/v2"
+	socketio "github.com/ismhdez/socket.io-golang/v4"
 )
 
 func socketIoHandle(io *socketio.Io) {
-	io.OnAuthorization(func(params map[string]string) bool {
+	io.OnAuthorization(func(socket *socketio.Socket, params map[string]string) (bool, string) {
 		// auth, ok := params["Authorization"]
 		// if !ok {
-		// 	return false
+		// 	return false, "missing authorization!
 		// }
-		return true
+
+		return true, ""
 	})
 
 	io.OnConnection(func(socket *socketio.Socket) {

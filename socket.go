@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/doquangtan/socket.io/v4/engineio"
-	"github.com/doquangtan/socket.io/v4/socket_protocol"
 	"github.com/gofiber/websocket/v2"
 	gWebsocket "github.com/gorilla/websocket"
+	"github.com/ismhdez/socket.io-golang/v4/engineio"
+	"github.com/ismhdez/socket.io-golang/v4/socket_protocol"
 )
 
 type Conn struct {

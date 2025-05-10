@@ -1,5 +1,3 @@
-<a href="https://buymeacoffee.com/johndylan1r" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
-
 # golang socket.io
 
 - socket.io is library an implementation of [Socket.IO](http://socket.io) in Golang, which is a realtime application framework.
@@ -15,13 +13,13 @@
 Install the package with:
 
 ```bash
-go get github.com/doquangtan/socket.io/v4
+go get github.com/ismhdez/socket.io-golang/v4
 ```
 
 Import it with:
 
 ```go
-import "github.com/doquangtan/socket.io/v4"
+import "github.com/ismhdez/socket.io-golang/v4"
 ```
 
 and use `socketio` as the package name inside the code.
@@ -39,7 +37,7 @@ Using with standard library [net/http](https://pkg.go.dev/net/http)
 ```go
 import (
 	"net/http"
-	socketio "github.com/doquangtan/socket.io/v4"
+	socketio "github.com/ismhdez/socket.io-golang/v4"
 )
 
 func main() {
@@ -59,7 +57,7 @@ Using with web-framework [Gin](https://github.com/gin-gonic/gin)
 ```go
 import (
 	"github.com/gin-gonic/gin"
-	socketio "github.com/doquangtan/socket.io/v4"
+	socketio "github.com/ismhdez/socket.io-golang/v4"
 )
 
 func main() {
@@ -80,7 +78,7 @@ Using with web-framework [Go Fiber](https://gofiber.io)
 ```go
 import (
 	"github.com/gofiber/fiber/v2"
-	socketio "github.com/doquangtan/socket.io/v4"
+	socketio "github.com/ismhdez/socket.io-golang/v4"
 )
 
 func main() {
