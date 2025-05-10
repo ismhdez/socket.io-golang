@@ -60,6 +60,14 @@ func (c *Conn) RemoteAddr() string {
 	return ""
 }
 
+func (c *Conn) Headers(key string, defaultValue ...string) string {
+	if c.fasthttp != nil {
+		return c.fasthttp.Headers(key, defaultValue...)
+	}
+
+	return ""
+}
+
 func (c *Conn) UserAgent() string {
 	if c.fasthttp != nil {
 		return c.fasthttp.Headers("User-Agent")
