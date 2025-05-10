@@ -3,6 +3,8 @@ package socketio
 import (
 	"errors"
 	"io"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/doquangtan/socket.io/v4/engineio"
@@ -46,10 +48,31 @@ func (c *Conn) Close() error {
 	return errors.New("not found http or fasthttp socket")
 }
 
+func (c *Conn) RemoteAddr() string {
+	if c.fasthttp != nil {
+		return strings.Split(c.fasthttp.Headers("X-Forwarded-For", c.fasthttp.RemoteAddr().String()), ",")[0]
+	}
+
+	if c.http != nil {
+		return c.http.RemoteAddr().(*net.TCPAddr).IP.String()
+	}
+
+	return ""
+}
+
+func (c *Conn) UserAgent() string {
+	if c.fasthttp != nil {
+		return c.fasthttp.Headers("User-Agent")
+	}
+
+	return ""
+}
+
 type Socket struct {
 	Id        string
 	Nps       string
 	Conn      *Conn
+	metadata  map[string]interface{}
 	rooms     roomNames
 	listeners listeners
 	pingTime  time.Duration
@@ -57,6 +80,14 @@ type Socket struct {
 	Join      func(room string)
 	Leave     func(room string)
 	To        func(room string) *Room
+}
+
+func (s *Socket) Metadata(key string, value ...interface{}) interface{} {
+	if len(value) > 0 {
+		s.metadata[key] = value[0]
+	}
+
+	return s.metadata[key]
 }
 
 func (s *Socket) On(event string, fn eventCallback) {
