@@ -31,14 +31,14 @@ type Io struct {
 	namespaces      namespaces
 	sockets         connections
 	readChan        chan payload
-	onAuthorization func(params map[string]string) bool
+	onAuthorization func(socket *Socket, params map[string]string) (bool, string)
 	onConnection    connectionEvent
 	close           chan interface{}
 }
 
 func New() *Io {
-	pingInterval := time.Duration(25000 * time.Millisecond)
-	pingTimeout := time.Duration(25000 * time.Millisecond)
+	pingInterval := 25000 * time.Millisecond
+	pingTimeout := 25000 * time.Millisecond
 	maxPayload := 1000000
 	io := &Io{
 		readChan: make(chan payload),
@@ -124,7 +124,7 @@ func (s *Io) OnConnection(fn connectionEventCallback) {
 	s.Of("/").onConnection.set("connection", fn)
 }
 
-func (s *Io) OnAuthorization(fn func(params map[string]string) bool) {
+func (s *Io) OnAuthorization(fn func(socket *Socket, params map[string]string) (bool, string)) {
 	s.onAuthorization = fn
 }
 
@@ -180,14 +180,14 @@ func (s *Io) read(ctx context.Context) {
 }
 
 func (s *Io) ping(ctx context.Context) {
-	timeoutTicker := time.NewTicker(time.Duration(1 * time.Second))
+	timeoutTicker := time.NewTicker(1 * time.Second)
 	defer timeoutTicker.Stop()
 	for {
 		select {
 		case <-timeoutTicker.C:
 			for _, socket := range s.sockets.all() {
 				if socket != nil && socket.pingTime > 0 {
-					socket.pingTime = time.Duration(socket.pingTime - time.Duration(1*time.Second))
+					socket.pingTime = socket.pingTime - 1*time.Second
 					if socket.pingTime <= 0 {
 						err := socket.Ping()
 						if err != nil {
@@ -301,21 +301,21 @@ func (s *Io) new() func(ctx *fiber.Ctx) error {
 
 					switch packetType {
 					case socket_protocol.DISCONNECT.String():
-						socket_nps, err := s.Of(namespace).sockets.get(socket.Id)
+						socketNps, err := s.Of(namespace).sockets.get(socket.Id)
 						if err != nil {
 							return
 						}
-						for _, callback := range socket_nps.listeners.get("disconnecting") {
+						for _, callback := range socketNps.listeners.get("disconnecting") {
 							callback(&EventPayload{
 								SID:    socket.Id,
 								Name:   "disconnecting",
-								Socket: socket_nps,
+								Socket: socketNps,
 								Error:  nil,
 								Data:   []interface{}{},
 							})
 						}
 					case socket_protocol.CONNECT.String():
-						socket_nps := &socket
+						socketNps := &socket
 						if namespace != "/" {
 							socketWithNamespace := Socket{
 								Id:   socket.Id,
@@ -326,11 +326,11 @@ func (s *Io) new() func(ctx *fiber.Ctx) error {
 								},
 								pingTime: s.pingInterval,
 							}
-							socket_nps = &socketWithNamespace
+							socketNps = &socketWithNamespace
 
 							if nps := s.namespaces.get(namespace); nps == nil {
-								socket_nps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
-									"message": "Invalid namespace",
+								socketNps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
+									"message": "invalid namespace",
 								})
 								continue
 							}
@@ -339,53 +339,57 @@ func (s *Io) new() func(ctx *fiber.Ctx) error {
 						if s.onAuthorization != nil {
 							dataJson := map[string]string{}
 							json.Unmarshal([]byte(rawpayload), &dataJson)
-							if !s.onAuthorization(dataJson) {
-								socket_nps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
-									"message": "Not authorized",
+							if valid, err := s.onAuthorization(socketNps, dataJson); !valid {
+								if err == "" {
+									err = "not authorized"
+								}
+
+								socketNps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
+									"message": err,
 								})
 								continue
 							}
 						}
 
 						socket.dispose = append(socket.dispose, func() {
-							s.Of(namespace).socketLeaveAllRooms(socket_nps)
-							s.Of(namespace).sockets.delete(socket_nps.Id)
-							for _, callback := range socket_nps.listeners.get("disconnect") {
+							s.Of(namespace).socketLeaveAllRooms(socketNps)
+							s.Of(namespace).sockets.delete(socketNps.Id)
+							for _, callback := range socketNps.listeners.get("disconnect") {
 								callback(&EventPayload{
-									SID:    socket_nps.Id,
+									SID:    socketNps.Id,
 									Name:   "disconnect",
-									Socket: socket_nps,
+									Socket: socketNps,
 									Error:  nil,
 									Data:   []interface{}{},
 								})
 							}
 						})
-						s.Of(namespace).sockets.set(socket_nps)
-						socket_nps.Join = func(room string) {
-							s.Of(namespace).socketJoinRoom(room, socket_nps)
+						s.Of(namespace).sockets.set(socketNps)
+						socketNps.Join = func(room string) {
+							s.Of(namespace).socketJoinRoom(room, socketNps)
 						}
-						socket_nps.Leave = func(room string) {
-							s.Of(namespace).socketLeaveRoom(room, socket_nps)
+						socketNps.Leave = func(room string) {
+							s.Of(namespace).socketLeaveRoom(room, socketNps)
 						}
-						socket_nps.To = func(room string) *Room {
+						socketNps.To = func(room string) *Room {
 							return s.Of(namespace).To(room)
 						}
 
-						socket_nps.writer(socket_protocol.CONNECT, engineio.ConnParameters{
+						socketNps.writer(socket_protocol.CONNECT, engineio.ConnParameters{
 							SID: socket.Id,
 						}.ToJson())
 
 						for _, callback := range s.Of(namespace).onConnection.get("connection") {
-							callback(socket_nps)
+							callback(socketNps)
 						}
 					case socket_protocol.EVENT.String():
-						socket_nps, err := s.Of(namespace).sockets.get(socket.Id)
+						socketNps, err := s.Of(namespace).sockets.get(socket.Id)
 						if err != nil {
 							return
 						}
 						if socket.Conn != nil {
 							s.readChan <- payload{
-								socket: socket_nps,
+								socket: socketNps,
 								data:   rawpayload,
 								ackId:  ackId,
 							}
@@ -500,21 +504,21 @@ func (s *Io) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				switch packetType {
 				case socket_protocol.DISCONNECT.String():
-					socket_nps, err := s.Of(namespace).sockets.get(socket.Id)
+					socketNps, err := s.Of(namespace).sockets.get(socket.Id)
 					if err != nil {
 						return
 					}
-					for _, callback := range socket_nps.listeners.get("disconnecting") {
+					for _, callback := range socketNps.listeners.get("disconnecting") {
 						callback(&EventPayload{
 							SID:    socket.Id,
 							Name:   "disconnecting",
-							Socket: socket_nps,
+							Socket: socketNps,
 							Error:  nil,
 							Data:   []interface{}{},
 						})
 					}
 				case socket_protocol.CONNECT.String():
-					socket_nps := &socket
+					socketNps := &socket
 					if namespace != "/" {
 						socketWithNamespace := Socket{
 							Id:   socket.Id,
@@ -525,11 +529,11 @@ func (s *Io) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							},
 							pingTime: s.pingInterval,
 						}
-						socket_nps = &socketWithNamespace
+						socketNps = &socketWithNamespace
 
 						if nps := s.namespaces.get(namespace); nps == nil {
-							socket_nps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
-								"message": "Invalid namespace",
+							socketNps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
+								"message": "invalid namespace",
 							})
 							continue
 						}
@@ -538,44 +542,48 @@ func (s *Io) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					if s.onAuthorization != nil {
 						dataJson := map[string]string{}
 						json.Unmarshal([]byte(rawpayload), &dataJson)
-						if !s.onAuthorization(dataJson) {
-							socket_nps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
-								"message": "Not authorized",
+						if valid, err := s.onAuthorization(socketNps, dataJson); !valid {
+							if err == "" {
+								err = "not authorized"
+							}
+
+							socketNps.writer(socket_protocol.CONNECT_ERROR, map[string]interface{}{
+								"message": err,
 							})
 							continue
 						}
 					}
 
 					socket.dispose = append(socket.dispose, func() {
-						s.Of(namespace).socketLeaveAllRooms(socket_nps)
-						s.Of(namespace).sockets.delete(socket_nps.Id)
-						for _, callback := range socket_nps.listeners.get("disconnect") {
+						s.Of(namespace).socketLeaveAllRooms(socketNps)
+						s.Of(namespace).sockets.delete(socketNps.Id)
+						for _, callback := range socketNps.listeners.get("disconnect") {
 							callback(&EventPayload{
-								SID:    socket_nps.Id,
+								SID:    socketNps.Id,
 								Name:   "disconnect",
-								Socket: socket_nps,
+								Socket: socketNps,
 								Error:  nil,
 								Data:   []interface{}{},
 							})
 						}
 					})
-					s.Of(namespace).sockets.set(socket_nps)
-					socket_nps.Join = func(room string) {
-						s.Of(namespace).socketJoinRoom(room, socket_nps)
+					s.Of(namespace).sockets.set(socketNps)
+					socketNps.Join = func(room string) {
+						s.Of(namespace).socketJoinRoom(room, socketNps)
 					}
-					socket_nps.Leave = func(room string) {
-						s.Of(namespace).socketLeaveRoom(room, socket_nps)
+					socketNps.Leave = func(room string) {
+						s.Of(namespace).socketLeaveRoom(room, socketNps)
 					}
-					socket_nps.To = func(room string) *Room {
+					socketNps.To = func(room string) *Room {
 						return s.Of(namespace).To(room)
 					}
 
-					socket_nps.writer(socket_protocol.CONNECT, engineio.ConnParameters{
+					socketNps.writer(socket_protocol.CONNECT, engineio.ConnParameters{
 						SID: socket.Id,
 					}.ToJson())
 
 					for _, callback := range s.Of(namespace).onConnection.get("connection") {
-						callback(socket_nps)
+						callback(socketNps)
 					}
 				case socket_protocol.EVENT.String():
 					socket_nps, err := s.Of(namespace).sockets.get(socket.Id)
