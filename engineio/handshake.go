@@ -41,7 +41,7 @@ func (p ConnParameters) ToJson() jsonParameters {
 		Upgrades:     p.Upgrades,
 		PingInterval: int(p.PingInterval / time.Millisecond),
 		PingTimeout:  int(p.PingTimeout / time.Millisecond),
-		MaxPayload:   int(p.MaxPayload),
+		MaxPayload:   p.MaxPayload,
 	}
 	return arg
 }

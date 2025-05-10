@@ -115,6 +115,10 @@ type Socket struct {
 }
 
 func (s *Socket) Metadata(key string, value ...interface{}) interface{} {
+	if s.metadata == nil {
+		s.metadata = make(map[string]interface{})
+	}
+
 	if len(value) > 0 {
 		s.metadata[key] = value[0]
 	}
