@@ -68,6 +68,30 @@ func (c *Conn) Headers(key string, defaultValue ...string) string {
 	return ""
 }
 
+func (c *Conn) Query(key string, defaultValue ...string) string {
+	if c.fasthttp != nil {
+		return c.fasthttp.Query(key, defaultValue...)
+	}
+
+	return ""
+}
+
+func (c *Conn) Params(key string, defaultValue ...string) string {
+	if c.fasthttp != nil {
+		return c.fasthttp.Params(key, defaultValue...)
+	}
+
+	return ""
+}
+
+func (c *Conn) Cookies(key string, defaultValue ...string) string {
+	if c.fasthttp != nil {
+		return c.fasthttp.Cookies(key, defaultValue...)
+	}
+
+	return ""
+}
+
 func (c *Conn) UserAgent() string {
 	if c.fasthttp != nil {
 		return c.fasthttp.Headers("User-Agent")
